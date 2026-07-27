@@ -4,6 +4,20 @@ My foobar2000 UI + theme configuration — a portable install running **Columns 
 
 This repo holds only the **scripts and configs** — not the music library, and not the volatile foobar databases/caches.
 
+## Showcase
+
+Album grid — crisp per-tile covers, cover-derived accent on the player bar:
+
+![Album grid](screenshots/album-grid.png)
+
+Lyrics tab — per-track blurred-cover backdrop with the current line highlighted:
+
+![Lyrics tab](screenshots/lyrics.png)
+
+Full window:
+
+![Overview](screenshots/overview.png)
+
 ## What's here
 
 | Path | What it is |
