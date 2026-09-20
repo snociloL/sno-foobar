@@ -6,12 +6,15 @@ This repo holds only the **scripts and configs** — not the music library, not 
 
 ## Versions
 
-Two versions are kept here:
+Three generations of this setup are kept, each a downloadable [release](https://github.com/snociloL/sno-foobar/releases):
 
-- **`main`** (current) — the **Now Playing** tab carries an **Up next / Lyrics** toggle, so synced lyrics can swap in for the playing queue in the right pane.
-- **`classic`** — the earlier layout, where the Now Playing right pane shows **only the queue** and lyrics live on their own tab. Frozen at the pre-toggle commit.
+| Version | UI | Get it |
+|---------|----|--------|
+| **v2-nowplaying** — current (`main`) | Content Shell — the **Now Playing** tab has an **Up next / Lyrics** toggle, so synced lyrics swap in for the playing queue | [release](https://github.com/snociloL/sno-foobar/releases/tag/v2-nowplaying) |
+| **v1-classic** | Content Shell — Now Playing shows **only the queue**; lyrics on their own tab | [release](https://github.com/snociloL/sno-foobar/releases/tag/v1-classic) · [`classic` branch](https://github.com/snociloL/sno-foobar/tree/classic) |
+| **v0-jssmooth** | The original **js-smooth** theme layout + the early player bar | [release](https://github.com/snociloL/sno-foobar/releases/tag/v0-jssmooth) |
 
-Get the classic build from the [`classic` branch](https://github.com/snociloL/sno-foobar/tree/classic) or the [**v1-classic** release](https://github.com/snociloL/sno-foobar/releases/tag/v1-classic) (Source-code zip). Everything below describes the current `main` version.
+Everything below describes the current **v2** (`main`) version.
 
 ## Showcase
 
