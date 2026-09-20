@@ -4,6 +4,15 @@ My foobar2000 UI + theme configuration — a portable install running **Columns 
 
 This repo holds only the **scripts and configs** — not the music library, not the ImgBB API key, and not the volatile foobar databases/caches.
 
+## Versions
+
+Two versions are kept here:
+
+- **`main`** (current) — the **Now Playing** tab carries an **Up next / Lyrics** toggle, so synced lyrics can swap in for the playing queue in the right pane.
+- **`classic`** — the earlier layout, where the Now Playing right pane shows **only the queue** and lyrics live on their own tab. Frozen at the pre-toggle commit.
+
+Get the classic build from the [`classic` branch](https://github.com/snociloL/sno-foobar/tree/classic) or the [**v1-classic** release](https://github.com/snociloL/sno-foobar/releases/tag/v1-classic) (Source-code zip). Everything below describes the current `main` version.
+
 ## Showcase
 
 Browse — album grid with the centered tab bar, plus Play all / Shuffle:
