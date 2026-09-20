@@ -54,7 +54,7 @@ var grid = { x: 0, y: 0, w: 0, h: 0, cols: 1, cellW: 0, coverH: 0, labelH: 46, g
 var fTab, fGridLabel, fGridSub, fNpTitle, fNpArtist, fNpAlbum, fLyric, fLyricCur, fMsg, fPlaceholder, fRow, fRowHi, fAction, fActionIcon, fHdr, fHdrSub, fAlbumTitle;
 
 // ---------- now-playing artwork ----------
-var npFull = null, npArt = null, npBg = null;
+var npFull = null, npArt = null, npBg = null, npBgVer = 0, npMaskImg = null, npMaskKey = '';
 
 // ---------- now-playing track list ----------
 var npList = null, npPlaylist = -1, npPlayingItem = -1;
@@ -62,6 +62,8 @@ var npListScroll = 0, npListScrollTo = 0, npRowH = 30, npListMax = 0;
 var npListGeo = { x: 0, y: 0, w: 0, h: 0 };
 var npListHover = -1, npCenterPending = false;
 var npRows = [];                // display rows: {type:'header',album,artist} | {type:'track',i,y,h}
+var npRight = window.GetProperty('shell.npRight', 'queue');   // 'queue' | 'lyrics' - right pane of Now Playing
+var npTogQ = null, npTogL = null, npTogHover = '';
 
 // ---------- Browse album detail (drill-down) ----------
 var browseView = 'grid';        // 'grid' | 'album'
@@ -112,6 +114,8 @@ var scrolling = false;          // true while a scroll is easing -> use fast int
 
 function startAnim() { if (!anim) anim = window.SetInterval(tick, 16); }
 function stopAnim()  { if (anim) { window.ClearInterval(anim); anim = null; } }
+function lyricsActive() { return activeTab === 2 || (activeTab === 1 && npRight === 'lyrics'); }
+function setNpRight(m) { if (npRight === m) return; npRight = m; window.SetProperty('shell.npRight', m); startAnim(); window.Repaint(); }
 
 // =====================================================================
 //  ACCENT
@@ -146,7 +150,7 @@ function computeAccent(src) {
 //  NOW-PLAYING ARTWORK
 // =====================================================================
 function loadNpArt(metadb) {
-    npFull = null; npArt = null; npBg = null;
+    npFull = null; npArt = null; npBg = null; npBgVer++;
     if (!metadb) { computeAccent(null); return; }
     try {
         var full = utils.GetAlbumArtV2(metadb, 0);
@@ -387,7 +391,7 @@ function trackKeyOf(m) { try { return m ? TF.filepath.EvalWithMetadb(m) : ''; } 
 // the shell catches that save instead of showing "No lyrics" for tracks not yet cached.
 function scheduleLyricRetry(metadb, n) {
     clearLyricRetry();
-    if (n > 6) { lyricMsg = 'No lyrics found'; if (activeTab === 2) window.Repaint(); return; }
+    if (n > 6) { lyricMsg = 'No lyrics found'; if (lyricsActive()) window.Repaint(); return; }
     var key = trackKeyOf(metadb);
     lyricRetry = window.SetTimeout(function () {
         lyricRetry = null;
@@ -396,7 +400,7 @@ function scheduleLyricRetry(metadb, n) {
         buildLyricsIndex();
         if (applyLyricsText(readLyricSource(np))) {
             lyricMsg = ''; lyricIndex = -1; lyricScroll = 0; lyricScrollTo = 0;
-            if (activeTab === 2) startAnim();
+            if (lyricsActive()) startAnim();
             window.Repaint();
         } else scheduleLyricRetry(metadb, n + 1);
     }, 2500);
@@ -435,7 +439,7 @@ function adjustOffset(delta) {
     var np = fb.GetNowPlaying();
     if (np) { loadOffsetMap(); var k = offsetKeyFor(np); if (lyricOffset === 0) delete lyricOffMap[k]; else lyricOffMap[k] = lyricOffset; saveOffsetMap(); }
     lyricIndex = -1;                       // force resync on next tick
-    if (activeTab === 2) startAnim();
+    if (lyricsActive()) startAnim();
     window.Repaint();
 }
 
@@ -543,8 +547,8 @@ function tick() {
     }
     if (pending) keep = true;
 
-    // lyrics sync + auto-scroll
-    if (activeTab === 2 && lyricSynced) {
+    // lyrics sync + auto-scroll (Lyrics tab OR Now Playing right pane set to Lyrics)
+    if (lyricsActive() && lyricSynced) {
         var ni = currentLyric(fb.PlaybackTime);
         if (ni !== lyricIndex) {
             lyricIndex = ni;
@@ -554,7 +558,7 @@ function tick() {
         if (Math.abs(lyricScrollTo - lyricScroll) > 0.5) { lyricScroll += (lyricScrollTo - lyricScroll) / 5; repaint = true; keep = true; }
         else lyricScroll = lyricScrollTo;
         if (fb.IsPlaying && !fb.IsPaused) keep = true;
-    } else if (activeTab === 2) {
+    } else if (lyricsActive()) {
         if (Math.abs(lyricScrollTo - lyricScroll) > 0.5) { lyricScroll += (lyricScrollTo - lyricScroll) / 5; repaint = true; keep = true; }
         else if (lyricScroll !== lyricScrollTo) { lyricScroll = lyricScrollTo; repaint = true; }
     }
@@ -879,42 +883,86 @@ function paintNowPlaying(gr) {
     gr.GdiDrawText(TF.npArtist.Eval(), fNpArtist, ACCENT,  24, ty + Math.round(textH * 0.46), paneW - 48, Math.round(textH * 0.30), DT_CENTER | DT_TOP | TXT);
     if (!wide || areaH > 360)
         gr.GdiDrawText(TF.npAlbum.Eval(), fNpAlbum, C_SUB, 24, ty + Math.round(textH * 0.74), paneW - 48, Math.round(textH * 0.26), DT_CENTER | DT_TOP | TXT);
-    if (wide) drawNpList(gr, paneW + 22, areaY + 20, W - paneW - 44, areaH - 40);
-    else npListGeo = { x: 0, y: 0, w: 0, h: 0 };
+    if (wide) {
+        var rx = paneW + 22, rw = W - paneW - 44;
+        var togY = areaY + 14, togH = clamp(Math.round(H * 0.032), 22, 30);
+        var cy0 = togY + togH + 14, ch = areaH - (cy0 - areaY) - 16;
+        if (npRight === 'lyrics') { npListGeo = { x: 0, y: 0, w: 0, h: 0 }; drawLyricsPane(gr, rx, cy0, rw, ch); }
+        else { lyricOffMinusRect = null; lyricOffPlusRect = null; drawNpList(gr, rx, cy0, rw, ch); }
+        maskStrip(gr, rx - 8, areaY, rw + 16, cy0 - areaY - 4);   // hide list rows scrolled up behind the toggle
+        drawNpToggle(gr, rx, togY, rw, togH);
+    } else { npListGeo = { x: 0, y: 0, w: 0, h: 0 }; npTogQ = npTogL = null; }
 }
 
-function paintLyrics(gr) {
-    var areaY = TABBAR_H, areaH = H - TABBAR_H, midY = areaY + areaH / 2;
+// Re-paints the Now Playing backdrop over a rect so scrolled content behind the toggle is hidden.
+// Renders through a cached offscreen so it's a pixel-exact 1:1 copy of the backdrop (no re-scale seam).
+function maskStrip(gr, sx, sy, sw, sh) {
+    if (sh <= 0 || sw <= 0) return;
+    if (!npBg) { gr.FillSolidRect(sx, sy, sw, sh, C_BG); return; }
+    var key = sx + '_' + sy + '_' + sw + '_' + sh + '_' + W + '_' + H + '_' + npBgVer;
+    if (key !== npMaskKey || !npMaskImg) {
+        try {
+            var img = gdi.CreateImage(sw, sh), g2 = img.GetGraphics();
+            g2.SetInterpolationMode(7);
+            g2.DrawImage(npBg, -sx, -sy, W, H, 0, 0, npBg.Width, npBg.Height, 0, 255);   // same scale as the full backdrop, shifted so the strip lands at 0,0
+            g2.FillSolidRect(0, 0, sw, sh, RGBA(16, 16, 18, 150));
+            img.ReleaseGraphics(g2);
+            npMaskImg = img; npMaskKey = key;
+        } catch (e) { npMaskImg = null; }
+    }
+    if (npMaskImg) gr.DrawImage(npMaskImg, sx, sy, sw, sh, 0, 0, sw, sh, 0, 255);
+    else {
+        gr.SetInterpolationMode(7);
+        gr.DrawImage(npBg, sx, sy, sw, sh, npBg.Width * sx / W, npBg.Height * sy / H, npBg.Width * sw / W, npBg.Height * sh / H, 0, 255);
+        gr.FillSolidRect(sx, sy, sw, sh, RGBA(16, 16, 18, 150));
+    }
+}
+
+function drawNpToggle(gr, x, y, w, h) {
+    var lw = Math.round(w / 2), rw2 = w - lw;
+    var qOn = npRight !== 'lyrics';
+    var ar = (ACCENT >> 16) & 255, ag = (ACCENT >> 8) & 255, ab = ACCENT & 255;
+    gr.SetSmoothingMode(2);
+    gr.FillRoundRect(x, y, w, h, h / 2, h / 2, RGBA(255, 255, 255, 14));
+    gr.FillRoundRect(qOn ? x : x + lw, y, qOn ? lw : rw2, h, h / 2, h / 2, RGBA(ar, ag, ab, 60));
+    gr.SetSmoothingMode(0);
+    gr.GdiDrawText('Up next', fRow, qOn ? C_TITLE : C_SUB, x, y, lw, h, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    gr.GdiDrawText('Lyrics', fRow, qOn ? C_SUB : C_TITLE, x + lw, y, rw2, h, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+    npTogQ = { x: x, y: y, w: lw, h: h };
+    npTogL = { x: x + lw, y: y, w: rw2, h: h };
+}
+
+// Renders the lyrics view (synced or plain) + the per-song offset control inside any rect.
+function drawLyricsPane(gr, ax, ay, aw, ah) {
     lyricOffMinusRect = null; lyricOffPlusRect = null;
+    var midY = ay + ah / 2, lm = Math.max(20, Math.round(aw * 0.07));
     if (!lyrics.length) {
-        gr.GdiDrawText(lyricMsg || 'No lyrics', fMsg, C_SUB, 0, areaY, W, areaH, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
+        gr.GdiDrawText(lyricMsg || 'No lyrics', fMsg, C_SUB, ax, ay, aw, ah, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX);
         return;
     }
     if (!lyricSynced) {
-        // plain scroll
-        var yy = areaY + 24 - lyricScroll;
+        var yy = ay + 24 - lyricScroll;
         for (var i = 0; i < lyrics.length; i++) {
             var ly = yy + i * lyricLineH;
-            if (ly > areaY - lyricLineH && ly < H) {
-                gr.GdiDrawText(lyrics[i].text, fLyric, C_SUB, 40, ly, W - 80, lyricLineH, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
-            }
+            if (ly > ay - lyricLineH && ly < ay + ah)
+                gr.GdiDrawText(lyrics[i].text, fLyric, C_SUB, ax + lm, ly, aw - lm * 2, lyricLineH, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
         }
         return;
     }
     var base = midY - lyricScroll - lyricLineH / 2;
     for (var j = 0; j < lyrics.length; j++) {
         var y = base + j * lyricLineH;
-        if (y < areaY - lyricLineH || y > H) continue;
+        if (y < ay - lyricLineH || y > ay + ah) continue;
         if (!lyrics[j].text) continue;
-        var cur = (j === lyricIndex);
-        var dist = Math.abs(j - lyricIndex);
-        var col = cur ? C_TITLE : (dist === 1 ? C_SUB : C_DIM);
-        gr.GdiDrawText(lyrics[j].text, cur ? fLyricCur : fLyric, cur ? C_TITLE : col,
-            40, y, W - 80, lyricLineH + 6, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
+        var cur = (j === lyricIndex), dist = Math.abs(j - lyricIndex);
+        // Keep off lines readable: gentle fade to a legible floor; current stands out by weight + size + brightness.
+        var lv = cur ? 240 : clamp(208 - dist * 12, 162, 208);
+        var col = cur ? C_TITLE : RGB(lv, lv, Math.min(255, lv + 5));
+        gr.GdiDrawText(lyrics[j].text, cur ? fLyricCur : fLyric, col,
+            ax + lm, y, aw - lm * 2, lyricLineH + 6, DT_CENTER | DT_VCENTER | DT_SINGLELINE | DT_NOPREFIX | DT_END_ELLIPSIS);
     }
-    // per-song sync offset control (top-right): [-]  +0.0s  [+]
-    var oh = clamp(Math.round(H * 0.032), 22, 30), oy = areaY + 14, bw = oh, pad = 18, lblW = 60;
-    var px = W - pad - bw, lx = px - 6 - lblW, mx = lx - 6 - bw;
+    var oh = clamp(Math.round(H * 0.032), 22, 30), oy = ay + 10, bw = oh, pad = 12, lblW = 54;
+    var px = ax + aw - pad - bw, lx = px - 6 - lblW, mx = lx - 6 - bw;
     var lbl = (lyricOffset > 0 ? '+' : '') + lyricOffset.toFixed(1) + 's';
     gr.SetSmoothingMode(2);
     gr.FillRoundRect(mx, oy, bw, oh, 6, 6, RGBA(255, 255, 255, lyricOffHover === 'minus' ? 46 : 18));
@@ -926,6 +974,8 @@ function paintLyrics(gr) {
     lyricOffMinusRect = { x: mx, y: oy, w: bw, h: oh };
     lyricOffPlusRect = { x: px, y: oy, w: bw, h: oh };
 }
+
+function paintLyrics(gr) { drawLyricsPane(gr, 0, TABBAR_H, W, H - TABBAR_H); }
 
 function on_paint(gr) {
     if (W <= 0 || H <= 0) return;
@@ -1005,12 +1055,20 @@ function lyricOffAt(x, y) {
     if (inR(lyricOffPlusRect)) return 'plus';
     return '';
 }
+function npTogAt(x, y) {
+    function inR(r) { return r && x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h; }
+    if (inR(npTogQ)) return 'queue';
+    if (inR(npTogL)) return 'lyrics';
+    return '';
+}
 
 function on_mouse_move(x, y) {
     var t = tabAt(x, y);
     if (t !== tabHover) { tabHover = t; window.Repaint(); }
     var ah = actionAt(x, y);
     if (ah !== actionHover) { actionHover = ah; window.Repaint(); }
+    var lo = lyricOffAt(x, y);                    // offset control (Lyrics tab or NP right pane)
+    if (lo !== lyricOffHover) { lyricOffHover = lo; window.Repaint(); }
     if (activeTab === 0) {
         if (browseView === 'grid') {
             var g = gridAt(x, y);
@@ -1020,17 +1078,16 @@ function on_mouse_move(x, y) {
             if (abh !== albumBtnHover || atr !== albumHover) { albumBtnHover = abh; albumHover = atr; window.Repaint(); }
         }
     } else if (activeTab === 1) {
-        var r = npRowAt(x, y);
+        var tg = npTogAt(x, y);
+        if (tg !== npTogHover) { npTogHover = tg; window.Repaint(); }
+        var r = (npRight === 'queue') ? npRowAt(x, y) : -1;
         if (r !== npListHover) { npListHover = r; window.Repaint(); }
-    } else if (activeTab === 2) {
-        var lo = lyricOffAt(x, y);
-        if (lo !== lyricOffHover) { lyricOffHover = lo; window.Repaint(); }
     }
 }
 
 function on_mouse_leave() {
-    if (tabHover !== -1 || grid.selHover !== -1 || npListHover !== -1 || actionHover !== '' || albumHover !== -1 || albumBtnHover !== '' || lyricOffHover !== '') {
-        tabHover = -1; grid.selHover = -1; npListHover = -1; actionHover = ''; albumHover = -1; albumBtnHover = ''; lyricOffHover = ''; window.Repaint();
+    if (tabHover !== -1 || grid.selHover !== -1 || npListHover !== -1 || actionHover !== '' || albumHover !== -1 || albumBtnHover !== '' || lyricOffHover !== '' || npTogHover !== '') {
+        tabHover = -1; grid.selHover = -1; npListHover = -1; actionHover = ''; albumHover = -1; albumBtnHover = ''; lyricOffHover = ''; npTogHover = ''; window.Repaint();
     }
 }
 
@@ -1042,10 +1099,12 @@ function on_mouse_lbtn_up(x, y) {
         if (t === 0 && activeTab === 0 && browseView === 'album') { browseView = 'grid'; window.Repaint(); }
         setTab(t); return;
     }
-    if (activeTab === 2) {
-        var lo = lyricOffAt(x, y);
-        if (lo === 'minus') { adjustOffset(-0.1); return; }
-        if (lo === 'plus') { adjustOffset(0.1); return; }
+    var lo = lyricOffAt(x, y);                    // offset control (Lyrics tab or NP right pane)
+    if (lo === 'minus') { adjustOffset(-0.1); return; }
+    if (lo === 'plus') { adjustOffset(0.1); return; }
+    if (activeTab === 1) {
+        var tg = npTogAt(x, y);
+        if (tg) { setNpRight(tg); return; }
     }
     if (activeTab === 0) {
         if (browseView === 'grid') {
@@ -1064,7 +1123,7 @@ function on_mouse_lbtn_dblclk(x, y) {
     if (activeTab === 0 && browseView === 'album') {
         var tr = albumRowAt(x, y);
         if (tr !== -1) { playAlbum(albumSel, tr, false); setTab(1); }
-    } else if (activeTab === 1) {
+    } else if (activeTab === 1 && npRight === 'queue') {
         var r = npRowAt(x, y);
         if (r !== -1) { try { plman.ExecutePlaylistDefaultAction(npPlaylist, r); } catch (e) {} }
     }
@@ -1075,14 +1134,14 @@ function on_mouse_wheel(step) {
         if (browseView === 'album') albumScrollTo = clamp(albumScrollTo - step * Math.round((albumGeo.h || 400) * 0.34), 0, albumMax);
         else gridScrollTo = clamp(gridScrollTo - step * Math.round(grid.rowH * 0.9), 0, grid.max);
         startAnim();
-    } else if (activeTab === 1 && npList && npList.Count) {
-        npListScrollTo = clamp(npListScrollTo - step * Math.round((npListGeo.h || 400) * 0.34), 0, npListMax);
-        startAnim();
-    } else if (activeTab === 2 && lyricSynced && lyricOffHover !== '') {
-        adjustOffset(step > 0 ? 0.1 : -0.1);   // wheel over the offset control = quick nudge
-    } else if (activeTab === 2 && !lyricSynced && lyrics.length) {
+    } else if (lyricsActive() && lyricSynced && lyricOffHover !== '') {
+        adjustOffset(step > 0 ? 0.1 : -0.1);          // wheel over the offset control = quick nudge
+    } else if (lyricsActive() && !lyricSynced && lyrics.length) {
         var maxL = Math.max(0, lyrics.length * lyricLineH - (H - TABBAR_H) + 40);
         lyricScrollTo = clamp(lyricScrollTo - step * lyricLineH, 0, maxL);
+        startAnim();
+    } else if (activeTab === 1 && npRight === 'queue' && npList && npList.Count) {
+        npListScrollTo = clamp(npListScrollTo - step * Math.round((npListGeo.h || 400) * 0.34), 0, npListMax);
         startAnim();
     }
 }
@@ -1099,7 +1158,7 @@ function on_playback_new_track(metadb) {
     window.Repaint();
 }
 function on_playback_time(t) {
-    if (activeTab === 2 && lyricSynced) {
+    if (lyricsActive() && lyricSynced) {
         var ni = currentLyric(t);
         if (ni !== lyricIndex) { lyricIndex = ni; lyricScrollTo = Math.max(0, ni) * lyricLineH; }
         startAnim();
