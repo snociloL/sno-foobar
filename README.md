@@ -6,11 +6,17 @@ This repo holds only the **scripts and configs** — not the music library, not 
 
 ## Showcase
 
-![Album grid](screenshots/album-grid.png)
-![Lyrics](screenshots/lyrics.png)
-![Overview](screenshots/overview.png)
+Browse — album grid with the centered tab bar, plus Play all / Shuffle:
 
-> These shots predate the rebuild; the UI is now the single-panel Content Shell described below (centered Browse / Now Playing / Lyrics tabs, no native tab strip, no status bar).
+![Browse](screenshots/album-grid.png)
+
+Now Playing — cover + the queue grouped by album header (art, year, genre):
+
+![Now Playing](screenshots/overview.png)
+
+Lyrics — synced, with the per-song sync-offset control (top-right):
+
+![Lyrics](screenshots/lyrics.png)
 
 ## What's here
 
