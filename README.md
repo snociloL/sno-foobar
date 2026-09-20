@@ -1,68 +1,76 @@
 # foobar2000 setup
 
-My foobar2000 UI + theme configuration — a portable install running **Columns UI** + **Spider Monkey Panel** with marc2003's **js-smooth** theme, a custom redesigned player bar, an OpenLyrics tab, and Discord Rich Presence.
+My foobar2000 UI + theme configuration — a portable install running **Columns UI** + **Spider Monkey Panel**, driven by a custom single-panel **Content Shell** (Browse / Now Playing / Lyrics with its own tab bar), a redesigned player bar, local synced lyrics, and Discord Rich Presence.
 
-This repo holds only the **scripts and configs** — not the music library, and not the volatile foobar databases/caches.
+This repo holds only the **scripts and configs** — not the music library, not the ImgBB API key, and not the volatile foobar databases/caches.
 
 ## Showcase
 
-Album grid — crisp per-tile covers, cover-derived accent on the player bar:
-
 ![Album grid](screenshots/album-grid.png)
-
-Lyrics tab — per-track blurred-cover backdrop with the current line highlighted:
-
-![Lyrics tab](screenshots/lyrics.png)
-
-Full window:
-
+![Lyrics](screenshots/lyrics.png)
 ![Overview](screenshots/overview.png)
+
+> These shots predate the rebuild; the UI is now the single-panel Content Shell described below (centered Browse / Now Playing / Lyrics tabs, no native tab strip, no status bar).
 
 ## What's here
 
 | Path | What it is |
 |------|-----------|
-| `smp_scripts/player_bar.js` | Custom-redesigned player bar (see below) |
-| `smp_icons/` | PNG icons (legacy; the current bar uses Segoe MDL2 glyphs) |
-| `js-smooth/{jssp,jssb,JScommon}.js` | The **edited** js-smooth theme scripts (playlist, album browser, shared helpers) |
-| `configuration/*.cfg` | foobar component configs — Columns UI layout, Discord, SMP, OpenLyrics |
+| `smp_scripts/content_shell.js` | **The main UI** — one SMP panel that draws its own tab bar and hosts all three views (album grid, now-playing art + queue, synced lyrics) |
+| `smp_scripts/player_bar.js` | Custom player bar — inline hover-scrub seekbar, volume slider, lyrics button, cover-derived accent |
+| `smp_scripts/now_playing_art.js` | Legacy stand-alone now-playing art panel (superseded by the shell; kept for reference) |
+| `foo_discord_rich/imgbb_upload.ps1` | Discord artwork uploader — posts covers to ImgBB, prints the URL (reads its key from `imgbb_key.txt`, which is **not** in this repo) |
+| `js-smooth/{jssp,jssb,JScommon}.js` | Edited js-smooth theme scripts (used by the alternate js-smooth layout) |
+| `configuration/*.cfg` | Component configs — Columns UI layout, SMP, OpenLyrics, Discord |
+| `smp_icons/` | Legacy PNG icons (the bar now uses Segoe MDL2 glyphs) |
 
 ## Components to install first
 
-Install these via **Preferences → Components**, then restore the files below:
+Via **Preferences → Components**, then restore the files below:
 
 - **Columns UI** (`foo_ui_columns`)
-- **Spider Monkey Panel** (`foo_spider_monkey_panel`) — ships the js-smooth theme under its `samples/js-smooth/` folder
-- **OpenLyrics** (`foo_openlyrics`)
+- **Spider Monkey Panel** (`foo_spider_monkey_panel`)
 - **Discord Rich Presence** (`foo_discord_rich`)
+- **OpenLyrics** (`foo_openlyrics`) — optional; used for on-demand lyric fetching that the shell then reads from disk
 
 ## Restore map
 
 Let `PROFILE` = the foobar2000 profile folder (portable install: next to `foobar2000.exe`).
 
-- `smp_scripts/player_bar.js` → `PROFILE\smp_scripts\`
-- `smp_icons\*` → `PROFILE\smp_icons\`
-- `js-smooth\*.js` → `PROFILE\user-components\foo_spider_monkey_panel\samples\js-smooth\js\` *(overwrite the stock files after the component is installed)*
+- `smp_scripts\*.js` → `PROFILE\smp_scripts\`
+- `foo_discord_rich\imgbb_upload.ps1` → `PROFILE\foo_discord_rich\`
+- `js-smooth\*.js` → `PROFILE\user-components\foo_spider_monkey_panel\samples\js-smooth\js\` *(overwrite the stock files)*
 - `configuration\*.cfg` → `PROFILE\configuration\`
 
-Then restart foobar2000.
+The SMP panels load a script via an `include('<abs path>\content_shell.js')` (or `player_bar.js`) line in the panel's Configure box — adjust the path to your install. Then restart foobar2000.
 
-## Key customizations recorded here
+## Key customizations
 
-**Player bar** (`player_bar.js`, full rewrite): transport icons from Windows' built-in Segoe MDL2 Assets font (scale crisp at any size); **accent color + soft blurred backdrop derived per-track from the album cover**; play/pause in an accent circle; full-width bottom line = seekbar (click/drag); fully responsive (art capped, content vertically centered, narrow drops extras).
+**Content Shell** (`content_shell.js`): a single SMP panel with a centered **Browse / Now Playing / Lyrics** tab bar (built because Columns UI's native tab strip can't be restyled and SMP can't drive it).
+- *Browse* — album grid over the library; click a cover for a drill-down album page (tracklist + Play/Shuffle); "Play all / Shuffle" pills.
+- *Now Playing* — big cover + the playing queue grouped by album header (art, year, genre), playing row highlighted.
+- *Lyrics* — synced `.lrc` reader with a per-song sync-offset nudge (top-right `[-] +0.0s [+]`, saved to `lyric_offsets.json`). Reads lyrics from, in order: a `.lrc`/`.txt` next to the track → `PROFILE\lyrics\` → the track's lyric tags.
+- Covers pre-render at cell size and blit 1:1; fast interpolation while scrolling, HQ at rest; 60 fps. **All `include`d SMP files must be pure ASCII** (raw non-ASCII glyphs get mis-decoded — use `\uXXXX` escapes).
 
-**js-smooth theme scripts:**
-- `jssp.js` (playlist): group-header date → year only + smaller font; genre no longer overlaps the cover; scroll tuned to a steady 60 fps; rating stars hidden (panel property).
-- `jssb.js` (album browser): scroll tuned to 60 fps.
-- `JScommon.js` (shared): fast interpolation while scrolling / crisp at rest; disk-cache cover cap raised **200 → 500 px** for sharp grid thumbnails (clear `PROFILE\smp_smooth_cache\` after changing).
+**Player bar** (`player_bar.js`): Segoe MDL2 transport glyphs; **accent + blurred backdrop derived per-track from the cover**; play/pause in an accent circle; **inline hover-scrub seekbar** with a seek-time bubble; **volume slider + mute**; a lyrics button that jumps the shell to the Lyrics tab (`window.NotifyOthers`). Fully responsive.
 
-**OpenLyrics** (in `foo_openlyrics.dll.cfg`): blurred album-art background, muted-grey text with a red highlighted current line, Segoe UI ~15 pt.
+**Discord Rich Presence** — album art is uploaded to **ImgBB** (Discord no longer displays catbox.moe images, and Imgur removed anonymous uploads). Set it up:
+1. Get a free ImgBB API key at <https://api.imgbb.com/>.
+2. Create `PROFILE\foo_discord_rich\imgbb_key.txt` containing just that key (gitignored — keep it private).
+3. Preferences → Discord Rich Presence → **Uploader** → *Custom command*:
+   `"C:\Windows\System32\WindowsPowerShell\v1.0\powershell.exe" -NoProfile -ExecutionPolicy Bypass -File "PROFILE\foo_discord_rich\imgbb_upload.ps1" "{filepath}"`
+   (use PowerShell's **full path** — a bare `powershell.exe` isn't resolved by foobar's launcher).
 
-**Layout** (in `foo_ui_columns.dll.cfg`): a Columns UI Tab stack on the right with **Album Grid** (JS Smooth Browser) and **Lyrics** (OpenLyrics) tabs.
+**js-smooth scripts** (alternate layout): year-only group-header date; genre no longer overlaps the cover; 60 fps scroll; disk-cache cover cap raised 200 → 500 px (clear `PROFILE\smp_smooth_cache\` after changing).
+
+## Lyrics
+
+Lyrics are local `.lrc` files the shell reads. Many were fetched from **lrclib.net** (Western/mainstream) and **NetEase** (`music.163.com`, for CJK/game music), matched by title + duration and saved next to each track. Purely instrumental tracks (e.g. game BGM) have none by design.
 
 ## Not included
 
-- The music library (kept elsewhere; huge + not mine to distribute)
-- foobar databases/caches: `metadb.sqlite`, `config.sqlite`, playlists, `smp_smooth_cache`, logs, the Discord artwork-uploader binary
+- The music library (huge + not mine to distribute)
+- `imgbb_key.txt` (secret), `lyric_offsets.json` (local), `image_hashes.json*` (cache), `*.log`, `smp_smooth_cache\`
+- foobar databases: `metadb.sqlite`, `config.sqlite`, playlists
 
-> Note: the `.cfg` files are foobar's own binary format — they restore the exact setup but aren't human-diffable.
+> The `.cfg` files are foobar's own binary format — they restore the setup but aren't human-diffable.

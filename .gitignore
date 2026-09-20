@@ -1,3 +1,15 @@
 Thumbs.db
 desktop.ini
 .DS_Store
+
+# secrets — never commit (ImgBB API key lives next to the uploader script)
+imgbb_key.txt
+**/imgbb_key.txt
+
+# local state / regenerable caches
+lyric_offsets.json
+**/lyric_offsets.json
+image_hashes.json
+image_hashes.json.*
+*.log
+smp_smooth_cache/
